@@ -42,7 +42,9 @@ flatmate/
 
 ## 2. Data Model
 
-### users (BetterAuth managed)
+### users
+
+This IS BetterAuth's user table, defined in our Drizzle schema and passed to BetterAuth's Drizzle adapter. BetterAuth manages its own additional tables (sessions, accounts, verifications) alongside this one — those do not need to be defined here as the adapter creates them automatically.
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -245,7 +247,7 @@ Follow pagination using the `index` query param (24 results per page). Terminate
 
 ### Error Handling
 
-If Rightmove returns an unexpected response or the `__NEXT_DATA__` structure changes, log the error and skip that search run. Retry on the next cycle.
+If Rightmove returns an unexpected response or the `__NEXT_DATA__` structure changes, log the error and skip that search run. Retry on the next cycle. For TfL/ORS failures during commute calculation, set `duration_mins = null`. On subsequent scraper runs, retry any commute_times rows that are null and older than 1 hour.
 
 ### New Member Commute Backfill
 
@@ -270,7 +272,7 @@ Each user configures their commute destinations in their profile:
 ### Calculation Trigger
 
 - **At scrape time**: when a new property is ingested, calculate commutes for all users in the search group. If a property already exists in the DB (found by another search) and a user already has commute times for it, skip that user — commute times are property+user scoped, not search scoped.
-- **On member join**: backfill commutes for all existing properties in the search (via `pending_commute_backfill` flag on `search_members`).
+- **On member join**: backfill commutes for all existing properties in the search (via `pending_commute_backfill` flag on `search_members`). Backfill respects the same ORS rate limits and daily caps — if the backfill is large, it will be spread across multiple scraper runs.
 
 ## 5. Push Notifications
 
@@ -314,7 +316,7 @@ The SvelteKit app registers a service worker as part of the PWA configuration. O
 - `/api/searches/[id]/properties/[propertyId]/status` — update status on search_properties
 - `/api/searches/[id]/properties/[propertyId]/shortlist` — toggle shortlist on search_properties
 - `/api/searches/[id]/properties/[propertyId]/comments` — list/create comments
-- `/api/location-suggest` — proxy to Rightmove's location typeahead API (unofficial — returns `locationIdentifier` codes for a given text query). This is an undocumented API and may change; if it breaks, users can fall back to manually entering a Rightmove search URL from which we extract the params.
+- `/api/location-suggest` — proxy to Rightmove's location typeahead API (unofficial — returns `locationIdentifier` codes for a given text query). This is an undocumented API and may change; if it breaks, we'll find an alternative at that point.
 - `/api/notify` — internal endpoint for scraper to trigger push notifications (secured via `SCRAPER_SECRET`)
 - `/api/push/subscribe` — register a Web Push subscription
 - `/api/push/unsubscribe` — remove a Web Push subscription
