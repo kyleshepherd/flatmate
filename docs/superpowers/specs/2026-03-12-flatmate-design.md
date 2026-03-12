@@ -249,9 +249,14 @@ Follow pagination using the `index` query param (24 results per page). Terminate
 
 If Rightmove returns an unexpected response or the `__NEXT_DATA__` structure changes, log the error and skip that search run. Retry on the next cycle. For TfL/ORS failures during commute calculation, set `duration_mins = null`. On subsequent scraper runs, retry any commute_times rows that are null and older than 1 hour.
 
-### New Member Commute Backfill
+### Commute Backfill
 
-When a user joins a search group, the web app sets `pending_commute_backfill = true` on their `search_members` row. On each run, the scraper checks for any members with this flag set, calculates commute times for all existing properties in that search for the new user's configured destinations, then clears the flag. This keeps all TfL/ORS API logic and rate limiting in the scraper with no additional API endpoints needed.
+The `pending_commute_backfill` flag on `search_members` triggers commute recalculation. It is set to `true` in two cases:
+
+1. **User joins a search group** — the web app sets the flag on the new `search_members` row.
+2. **User updates their commute destinations** (add/edit/remove) — the web app sets the flag on all of that user's `search_members` rows, and deletes their existing `commute_times` rows so they are recalculated from scratch.
+
+On each run, the scraper checks for any members with this flag set, calculates commute times for all properties in those searches for the user's current destinations, then clears the flag. This keeps all TfL/ORS API logic and rate limiting in the scraper with no additional API endpoints needed.
 
 ## 4. Commute Time Calculation
 
