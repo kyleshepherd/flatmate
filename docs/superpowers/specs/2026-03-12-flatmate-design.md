@@ -95,6 +95,7 @@ A saved Rightmove search configuration. Mirrors Rightmove's filter options.
 | search_id | uuid FK → searches | |
 | user_id | uuid FK → users | |
 | role | text | 'owner' or 'member' |
+| pending_commute_backfill | boolean | true when user joins, false after scraper processes |
 | joined_at | timestamp | |
 
 ### properties
@@ -120,7 +121,7 @@ Global table — one row per Rightmove listing, deduplicated by `rightmove_id`.
 | agent_name | text | |
 | agent_phone | text? | |
 | rightmove_url | text | Relative URL to listing |
-| listing_status | text | 'new' or 'reduced' |
+| listing_status | text | 'new', 'reduced', or 'let_agreed' |
 | first_seen_at | timestamp | When we first scraped it |
 
 ### search_properties
@@ -194,6 +195,16 @@ A user can have multiple subscriptions (one per device).
 
 When sending a push notification, if the endpoint returns HTTP 410 (Gone), delete the subscription row. This handles stale subscriptions from uninstalled browsers/devices.
 
+### scraper_state
+
+Simple key-value table for persisting scraper state across runs (e.g. ORS daily usage).
+
+| Column | Type | Notes |
+|--------|------|-------|
+| key | text PK | e.g. "ors_daily_count" |
+| value | text | Stored as text, parsed by scraper |
+| updated_at | timestamp | |
+
 ## 3. Scraper Design
 
 ### Schedule
@@ -237,7 +248,7 @@ If Rightmove returns an unexpected response or the `__NEXT_DATA__` structure cha
 
 ### New Member Commute Backfill
 
-When a user joins a search group, the web app marks their commutes as pending by calling `/api/commute/backfill`. The scraper picks up pending commute backfills on its next run and calculates commute times for all existing properties in that search for the new user's configured destinations. This keeps all TfL/ORS API logic and rate limiting in the scraper.
+When a user joins a search group, the web app sets `pending_commute_backfill = true` on their `search_members` row. On each run, the scraper checks for any members with this flag set, calculates commute times for all existing properties in that search for the new user's configured destinations, then clears the flag. This keeps all TfL/ORS API logic and rate limiting in the scraper with no additional API endpoints needed.
 
 ## 4. Commute Time Calculation
 
@@ -284,7 +295,7 @@ The SvelteKit app registers a service worker as part of the PWA configuration. O
 - `/searches/new` — create a new search. Location input with autocomplete (proxied through our API to Rightmove's location suggest endpoint to resolve `locationIdentifier` codes), radius, price range, bedrooms, property type, include let agreed.
 - `/searches/[id]` — main feed for a search. List of property cards with sort (newest, price low/high, commute time) and filter (status, bedrooms, price range). Toggle to map view (Leaflet with property pins). Quick actions on cards: shortlist, change status, open on Rightmove.
 - `/searches/[id]/shortlisted` — filtered view of shortlisted properties only.
-- `/properties/[id]` — property detail. Image gallery, floorplan, description, key features, available date, commute times for each group member, agent info, status workflow, comments thread, link to Rightmove. This is the deep link target for sharing within the app.
+- `/searches/[id]/properties/[propertyId]` — property detail within a search context. Image gallery, floorplan, description, key features, available date, commute times for each group member, agent info, status workflow, comments thread, link to Rightmove. This is the deep link target for sharing within the app.
 - `/invite/[code]` — join a search group via invite link. Shows search name and location, join button. Requires auth.
 
 ### Settings
@@ -296,15 +307,14 @@ The SvelteKit app registers a service worker as part of the PWA configuration. O
 - `/api/searches` — CRUD for searches
 - `/api/searches/[id]/members` — join, leave, remove member, transfer ownership
 - `/api/searches/[id]/properties` — list properties for a search feed (with sort/filter)
-- `/api/properties/[id]` — property detail
-- `/api/properties/[id]/status` — update status on search_properties
-- `/api/properties/[id]/shortlist` — toggle shortlist on search_properties
-- `/api/properties/[id]/comments` — list/create comments
+- `/api/searches/[id]/properties/[propertyId]` — property detail in search context
+- `/api/searches/[id]/properties/[propertyId]/status` — update status on search_properties
+- `/api/searches/[id]/properties/[propertyId]/shortlist` — toggle shortlist on search_properties
+- `/api/searches/[id]/properties/[propertyId]/comments` — list/create comments
 - `/api/location-suggest` — proxy to Rightmove's location suggest endpoint for autocomplete
 - `/api/notify` — internal endpoint for scraper to trigger push notifications (secured via `SCRAPER_SECRET`)
 - `/api/push/subscribe` — register a Web Push subscription
 - `/api/push/unsubscribe` — remove a Web Push subscription
-- `/api/commute/backfill` — internal endpoint to trigger commute backfill for a user joining a search (secured via `SCRAPER_SECRET`)
 
 ## 7. Authentication & Groups
 
