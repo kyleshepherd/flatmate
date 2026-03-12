@@ -167,27 +167,32 @@ Scoped to a search group's view of a property.
 
 ### commute_times
 
-Per property per user. Commute is the same regardless of which search found the property.
+Per property per user per destination per mode. Commute is the same regardless of which search found the property.
 
 | Column | Type | Notes |
 |--------|------|-------|
 | id | uuid PK | |
 | property_id | uuid FK → properties | |
 | user_id | uuid FK → users | |
-| destination_label | text | e.g. "Office" |
+| destination_id | uuid FK → user_commute_destinations | |
 | mode | text | 'transit', 'walking', or 'cycling' |
 | duration_mins | int? | null if calculation failed |
 | calculated_at | timestamp | |
+| | | unique(property_id, user_id, destination_id, mode) |
 
 ### push_subscriptions
+
+A user can have multiple subscriptions (one per device).
 
 | Column | Type | Notes |
 |--------|------|-------|
 | id | uuid PK | |
 | user_id | uuid FK → users | |
-| endpoint | text | Web Push endpoint |
+| endpoint | text unique | Web Push endpoint |
 | keys | jsonb | Web Push keys |
 | created_at | timestamp | |
+
+When sending a push notification, if the endpoint returns HTTP 410 (Gone), delete the subscription row. This handles stale subscriptions from uninstalled browsers/devices.
 
 ## 3. Scraper Design
 
@@ -200,7 +205,7 @@ Runs as a Railway cron job every 15 or 30 minutes (per search configuration).
 1. Query all active searches from the DB, filtered to those due for a scrape based on `scrape_interval_mins` and `last_scraped_at`.
 2. For each search, construct the Rightmove search URL from saved params (`locationIdentifier`, `minPrice`, `maxPrice`, `minBedrooms`, `maxBedrooms`, `radius`, `propertyType`, `includeLetAgreed`).
 3. Fetch the HTML page, extract `__NEXT_DATA__` → `props.pageProps.searchResults.properties`.
-4. Follow pagination using the `index` query param (24 results per page) to get all results.
+4. Follow pagination using the `index` query param (24 results per page). Stop when results are empty, fewer than 24, or 42 pages reached.
 5. For each property in the results:
    - **New to DB** (`rightmove_id` not in `properties`): insert into `properties`, create `search_properties` row.
    - **Exists but not linked to this search**: create `search_properties` row only.
@@ -218,8 +223,13 @@ Floorplan URLs are not included in the search results data, so for properties wi
 
 ### Rate Limiting
 
-- 1–2 second delay between Rightmove page fetches to avoid being blocked.
-- ORS batch matrix requests to minimise API calls for commute calculations.
+- **Rightmove**: 1–2 second delay between page fetches to avoid being blocked.
+- **TfL**: rate limit to ~30 requests/second (well under their 500/min limit). Process transit commute requests sequentially with a short delay.
+- **ORS**: free tier allows 40 requests/min and 2500/day for the matrix endpoint. Batch all origins for a scrape run into as few matrix calls as possible. If the daily limit is approached, skip commute calculation and retry next cycle. Track daily ORS usage in-memory during the scraper run.
+
+### Pagination
+
+Follow pagination using the `index` query param (24 results per page). Terminate when the returned properties array is empty or has fewer than 24 items. Cap at 42 pages (1000 properties) per search to prevent runaway scraping on overly broad searches.
 
 ### Error Handling
 
@@ -259,7 +269,7 @@ The SvelteKit app registers a service worker as part of the PWA configuration. O
 ### Flow
 
 1. Scraper finishes a run and finds new properties for a search.
-2. Scraper sends a POST to `/api/notify` with `{ searchId, newPropertyIds }`.
+2. Scraper sends a POST to `/api/notify` with `{ searchId, newPropertyIds }`, authenticated via a shared secret in the `Authorization` header (`SCRAPER_SECRET` env var). The endpoint rejects requests without a valid secret.
 3. The `/api/notify` endpoint looks up all `search_members` for that search, fetches their `push_subscriptions`, and sends a Web Push message to each.
 4. Notification content: "X new properties found in [search name]" with a link to the search feed.
 
@@ -271,7 +281,7 @@ The SvelteKit app registers a service worker as part of the PWA configuration. O
 
 ### Core
 - `/` — dashboard. Shows the user's searches with quick stats (new properties today, etc.)
-- `/searches/new` — create a new search. Location input, radius, price range, bedrooms, property type, include let agreed.
+- `/searches/new` — create a new search. Location input with autocomplete (proxied through our API to Rightmove's location suggest endpoint to resolve `locationIdentifier` codes), radius, price range, bedrooms, property type, include let agreed.
 - `/searches/[id]` — main feed for a search. List of property cards with sort (newest, price low/high, commute time) and filter (status, bedrooms, price range). Toggle to map view (Leaflet with property pins). Quick actions on cards: shortlist, change status, open on Rightmove.
 - `/searches/[id]/shortlisted` — filtered view of shortlisted properties only.
 - `/properties/[id]` — property detail. Image gallery, floorplan, description, key features, available date, commute times for each group member, agent info, status workflow, comments thread, link to Rightmove. This is the deep link target for sharing within the app.
@@ -295,6 +305,13 @@ BetterAuth with open sign-up. Supports email/password out of the box, with OAuth
 - All members see the same properties, statuses, shortlists, and comments for that search.
 - When a new member joins, their commute times are backfilled for existing properties.
 
+### Group Management
+
+- The owner can remove members from a search.
+- The owner can delete a search entirely (removes all `search_properties`, comments, and shortlists for that search — the underlying `properties` and `commute_times` rows are retained since they may be linked to other searches).
+- If the owner wants to leave, they must transfer ownership to another member first.
+- Members can leave a search voluntarily.
+
 ## 8. Deployment
 
 All services deployed on Railway:
@@ -311,3 +328,4 @@ All services deployed on Railway:
 - `WEB_PUSH_PUBLIC_KEY` / `WEB_PUSH_PRIVATE_KEY` — VAPID keys for push notifications
 - `BETTER_AUTH_SECRET` — BetterAuth session secret
 - `NOTIFY_ENDPOINT` — internal URL for scraper to ping the web app's `/api/notify`
+- `SCRAPER_SECRET` — shared secret for authenticating scraper → web API calls
