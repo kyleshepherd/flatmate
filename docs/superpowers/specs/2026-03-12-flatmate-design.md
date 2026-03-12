@@ -37,6 +37,7 @@ flatmate/
 | Scraper | Node.js + native fetch |
 | Commute APIs | TfL Journey Planner + OpenRouteService |
 | Hosting | Railway (web + scraper + Postgres) |
+| Linting/Formatting | Biome |
 | Monorepo | pnpm workspaces |
 
 ## 2. Data Model
@@ -83,7 +84,6 @@ A saved Rightmove search configuration. Mirrors Rightmove's filter options.
 | property_type | text? | null = Any |
 | include_let_agreed | boolean | |
 | invite_code | text unique | For sharing join links |
-| scrape_interval_mins | int | 15 or 30 |
 | last_scraped_at | timestamp? | |
 | created_at | timestamp | |
 
@@ -198,11 +198,11 @@ When sending a push notification, if the endpoint returns HTTP 410 (Gone), delet
 
 ### Schedule
 
-Runs as a Railway cron job every 15 or 30 minutes (per search configuration).
+Runs as a Railway cron job every 15 minutes. Processes all active searches on each run.
 
 ### Flow
 
-1. Query all active searches from the DB, filtered to those due for a scrape based on `scrape_interval_mins` and `last_scraped_at`.
+1. Query all active searches from the DB.
 2. For each search, construct the Rightmove search URL from saved params (`locationIdentifier`, `minPrice`, `maxPrice`, `minBedrooms`, `maxBedrooms`, `radius`, `propertyType`, `includeLetAgreed`).
 3. Fetch the HTML page, extract `__NEXT_DATA__` → `props.pageProps.searchResults.properties`.
 4. Follow pagination using the `index` query param (24 results per page). Stop when results are empty, fewer than 24, or 42 pages reached.
@@ -213,7 +213,7 @@ Runs as a Railway cron job every 15 or 30 minutes (per search configuration).
 6. For new properties where `numberOfFloorplans > 0`, fetch the individual Rightmove listing page to extract floorplan URLs.
 7. For new properties, calculate commute times for all users in the search group via TfL (transit) and ORS (walking/cycling batch matrix).
 8. Update `last_scraped_at` on the search.
-9. Ping the SvelteKit `/api/notify` endpoint with the list of new property IDs and which searches they belong to.
+9. Ping the SvelteKit `/api/notify` endpoint with the list of new property IDs, changed property IDs (with change details), and which searches they belong to. Notifications are sent for both new properties and price reductions.
 
 ### Data Extraction
 
@@ -225,7 +225,7 @@ Floorplan URLs are not included in the search results data, so for properties wi
 
 - **Rightmove**: 1–2 second delay between page fetches to avoid being blocked.
 - **TfL**: rate limit to ~30 requests/second (well under their 500/min limit). Process transit commute requests sequentially with a short delay.
-- **ORS**: free tier allows 40 requests/min and 2500/day for the matrix endpoint. Batch all origins for a scrape run into as few matrix calls as possible. If the daily limit is approached, skip commute calculation and retry next cycle. Track daily ORS usage in-memory during the scraper run.
+- **ORS**: free tier allows 40 requests/min and 2500/day for the matrix endpoint. Batch all origins for a scrape run into as few matrix calls as possible. If the daily limit is approached, skip commute calculation and retry next cycle. Track daily ORS usage via a simple `scraper_state` table (key-value with `ors_daily_count` and `ors_count_date`), reset when the date changes.
 
 ### Pagination
 
@@ -237,7 +237,7 @@ If Rightmove returns an unexpected response or the `__NEXT_DATA__` structure cha
 
 ### New Member Commute Backfill
 
-When a user joins a search group, trigger commute time calculations for all existing properties in that search for the new user's configured destinations.
+When a user joins a search group, the web app marks their commutes as pending by calling `/api/commute/backfill`. The scraper picks up pending commute backfills on its next run and calculates commute times for all existing properties in that search for the new user's configured destinations. This keeps all TfL/ORS API logic and rate limiting in the scraper.
 
 ## 4. Commute Time Calculation
 
@@ -290,11 +290,27 @@ The SvelteKit app registers a service worker as part of the PWA configuration. O
 ### Settings
 - `/settings` — profile management, commute destinations (add/edit/remove with label, location, and transport modes), notification preferences.
 
+### API Routes
+
+- `/api/auth/*` — BetterAuth handlers (login, register, session, etc.)
+- `/api/searches` — CRUD for searches
+- `/api/searches/[id]/members` — join, leave, remove member, transfer ownership
+- `/api/searches/[id]/properties` — list properties for a search feed (with sort/filter)
+- `/api/properties/[id]` — property detail
+- `/api/properties/[id]/status` — update status on search_properties
+- `/api/properties/[id]/shortlist` — toggle shortlist on search_properties
+- `/api/properties/[id]/comments` — list/create comments
+- `/api/location-suggest` — proxy to Rightmove's location suggest endpoint for autocomplete
+- `/api/notify` — internal endpoint for scraper to trigger push notifications (secured via `SCRAPER_SECRET`)
+- `/api/push/subscribe` — register a Web Push subscription
+- `/api/push/unsubscribe` — remove a Web Push subscription
+- `/api/commute/backfill` — internal endpoint to trigger commute backfill for a user joining a search (secured via `SCRAPER_SECRET`)
+
 ## 7. Authentication & Groups
 
 ### Auth
 
-BetterAuth with open sign-up. Supports email/password out of the box, with OAuth providers configurable later.
+BetterAuth with Google OAuth. BetterAuth manages its own tables (sessions, accounts, verifications) via its Drizzle adapter — these don't need to be explicitly defined in our schema.
 
 ### Groups (Search Membership)
 
@@ -327,5 +343,6 @@ All services deployed on Railway:
 - `ORS_API_KEY` — OpenRouteService API key
 - `WEB_PUSH_PUBLIC_KEY` / `WEB_PUSH_PRIVATE_KEY` — VAPID keys for push notifications
 - `BETTER_AUTH_SECRET` — BetterAuth session secret
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth credentials
 - `NOTIFY_ENDPOINT` — internal URL for scraper to ping the web app's `/api/notify`
 - `SCRAPER_SECRET` — shared secret for authenticating scraper → web API calls
