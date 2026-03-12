@@ -83,6 +83,7 @@ A saved Rightmove search configuration. Mirrors Rightmove's filter options.
 | max_bedrooms | int? | |
 | property_type | text? | null = Any |
 | include_let_agreed | boolean | |
+| is_active | boolean | Default true. Set false to pause scraping. |
 | invite_code | text unique | For sharing join links |
 | last_scraped_at | timestamp? | |
 | created_at | timestamp | |
@@ -126,7 +127,7 @@ Global table — one row per Rightmove listing, deduplicated by `rightmove_id`.
 
 ### search_properties
 
-Join table linking properties to searches. Holds per-group state.
+Join table linking properties to searches. Holds per-group state. Note: `status` here is the group's workflow status (their decision-making process), independent of `properties.listing_status` which reflects Rightmove's own status (new/reduced/let_agreed).
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -213,7 +214,7 @@ Runs as a Railway cron job every 15 minutes. Processes all active searches on ea
 
 ### Flow
 
-1. Query all active searches from the DB.
+1. Query all searches where `is_active = true`.
 2. For each search, construct the Rightmove search URL from saved params (`locationIdentifier`, `minPrice`, `maxPrice`, `minBedrooms`, `maxBedrooms`, `radius`, `propertyType`, `includeLetAgreed`).
 3. Fetch the HTML page, extract `__NEXT_DATA__` → `props.pageProps.searchResults.properties`.
 4. Follow pagination using the `index` query param (24 results per page). Stop when results are empty, fewer than 24, or 42 pages reached.
@@ -268,8 +269,8 @@ Each user configures their commute destinations in their profile:
 
 ### Calculation Trigger
 
-- **At scrape time**: when a new property is ingested, calculate commutes for all users in the search group.
-- **On member join**: backfill commutes for all existing properties in the search.
+- **At scrape time**: when a new property is ingested, calculate commutes for all users in the search group. If a property already exists in the DB (found by another search) and a user already has commute times for it, skip that user — commute times are property+user scoped, not search scoped.
+- **On member join**: backfill commutes for all existing properties in the search (via `pending_commute_backfill` flag on `search_members`).
 
 ## 5. Push Notifications
 
@@ -279,10 +280,12 @@ The SvelteKit app registers a service worker as part of the PWA configuration. O
 
 ### Flow
 
-1. Scraper finishes a run and finds new properties for a search.
-2. Scraper sends a POST to `/api/notify` with `{ searchId, newPropertyIds }`, authenticated via a shared secret in the `Authorization` header (`SCRAPER_SECRET` env var). The endpoint rejects requests without a valid secret.
+1. Scraper finishes a run and finds new or changed properties for a search.
+2. Scraper sends a POST to `/api/notify` with `{ searchId, newPropertyIds, changedProperties: [{ id, changes: [{ field, oldValue, newValue }] }] }`, authenticated via a shared secret in the `Authorization` header (`SCRAPER_SECRET` env var). The endpoint rejects requests without a valid secret.
 3. The `/api/notify` endpoint looks up all `search_members` for that search, fetches their `push_subscriptions`, and sends a Web Push message to each.
-4. Notification content: "X new properties found in [search name]" with a link to the search feed.
+4. Notification content:
+   - New listings: "X new properties found in [search name]" with a link to the search feed.
+   - Price reductions: "[address] price reduced to [new price]" with a link to the property.
 
 ## 6. Pages & Routes
 
@@ -311,7 +314,7 @@ The SvelteKit app registers a service worker as part of the PWA configuration. O
 - `/api/searches/[id]/properties/[propertyId]/status` — update status on search_properties
 - `/api/searches/[id]/properties/[propertyId]/shortlist` — toggle shortlist on search_properties
 - `/api/searches/[id]/properties/[propertyId]/comments` — list/create comments
-- `/api/location-suggest` — proxy to Rightmove's location suggest endpoint for autocomplete
+- `/api/location-suggest` — proxy to Rightmove's location typeahead API (unofficial — returns `locationIdentifier` codes for a given text query). This is an undocumented API and may change; if it breaks, users can fall back to manually entering a Rightmove search URL from which we extract the params.
 - `/api/notify` — internal endpoint for scraper to trigger push notifications (secured via `SCRAPER_SECRET`)
 - `/api/push/subscribe` — register a Web Push subscription
 - `/api/push/unsubscribe` — remove a Web Push subscription
@@ -334,7 +337,7 @@ BetterAuth with Google OAuth. BetterAuth manages its own tables (sessions, accou
 ### Group Management
 
 - The owner can remove members from a search.
-- The owner can delete a search entirely (removes all `search_properties`, comments, and shortlists for that search — the underlying `properties` and `commute_times` rows are retained since they may be linked to other searches).
+- The owner can delete a search entirely (cascade deletes `search_members`, `search_properties`, and their associated `comments` — the underlying `properties` and `commute_times` rows are retained since they may be linked to other searches).
 - If the owner wants to leave, they must transfer ownership to another member first.
 - Members can leave a search voluntarily.
 
