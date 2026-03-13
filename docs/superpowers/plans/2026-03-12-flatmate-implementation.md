@@ -406,7 +406,7 @@ export const verifications = pgTable("verifications", {
 - [ ] **Step 6: Create packages/db/src/schema/searches.ts**
 
 ```typescript
-import { boolean, pgTable, decimal, integer, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, pgTable, decimal, integer, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "./auth";
 
 export const searches = pgTable("searches", {
@@ -424,6 +424,8 @@ export const searches = pgTable("searches", {
 	maxBedrooms: integer("max_bedrooms"),
 	propertyType: text("property_type"),
 	includeLetAgreed: boolean("include_let_agreed").notNull().default(false),
+	availableFrom: date("available_from"),
+	availableTo: date("available_to"),
 	isActive: boolean("is_active").notNull().default(true),
 	inviteCode: text("invite_code").notNull().unique(),
 	lastScrapedAt: timestamp("last_scraped_at"),
@@ -1051,14 +1053,17 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 
 - [ ] **Step 2: Create +layout.svelte**
 
+Note: `pnpm create svelte@latest` scaffolds Svelte 5 — use runes syntax (`$props()`, `onclick`, `{@render children()}`), not Svelte 4 (`export let`, `on:click`, `<slot />`).
+
 ```svelte
 <script lang="ts">
 	import "../app.css";
+	import type { Snippet } from "svelte";
 	import type { LayoutData } from "./$types";
 	import * as Avatar from "$lib/components/ui/avatar";
 	import { Button } from "$lib/components/ui/button";
 
-	export let data: LayoutData;
+	let { data, children }: { data: LayoutData; children: Snippet } = $props();
 </script>
 
 <div class="min-h-screen bg-background text-foreground">
@@ -1081,7 +1086,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 		</nav>
 	</header>
 	<main class="mx-auto max-w-5xl px-4 py-6">
-		<slot />
+		{@render children()}
 	</main>
 </div>
 ```
@@ -1220,6 +1225,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			maxBedrooms: body.maxBedrooms ?? null,
 			propertyType: body.propertyType ?? null,
 			includeLetAgreed: body.includeLetAgreed ?? false,
+			availableFrom: body.availableFrom ?? null,
+			availableTo: body.availableTo ?? null,
 			inviteCode,
 		})
 		.returning();
@@ -1244,6 +1251,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 - Min/max bedrooms selects
 - Property type select (Any, Houses, Flats/Apartments, Bungalows, etc.)
 - Include let agreed checkbox
+- Available from date picker (optional)
+- Available to date picker (optional)
 - Search name text input
 - Submit button
 
@@ -1607,6 +1616,36 @@ const SCRAPER_SECRET = process.env.SCRAPER_SECRET!;
 
 const db = createDb(DATABASE_URL);
 
+function isDateString(s: string): boolean {
+	return /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+function filterByAvailability(
+	properties: ExtractedProperty[],
+	from: string | null,
+	to: string | null,
+): ExtractedProperty[] {
+	if (!from && !to) return properties;
+	const today = new Date().toISOString().split("T")[0];
+
+	return properties.filter((p) => {
+		if (!p.availableDate) {
+			// Available "Now" — include if today is within the window
+			if (from && today < from) return false;
+			if (to && today > to) return false;
+			return true;
+		}
+		if (!isDateString(p.availableDate)) {
+			// Non-date value like "Ask agent" — always include
+			return true;
+		}
+		// Specific date — check it falls within the window
+		if (from && p.availableDate < from) return false;
+		if (to && p.availableDate > to) return false;
+		return true;
+	});
+}
+
 async function scrapeSearch(search: typeof searches.$inferSelect) {
 	console.log(`Scraping: ${search.name} (${search.locationIdentifier})`);
 	const allExtracted: ExtractedProperty[] = [];
@@ -1636,13 +1675,17 @@ async function scrapeSearch(search: typeof searches.$inferSelect) {
 
 	console.log(`  Found ${allExtracted.length} properties`);
 
+	// Filter by availability window
+	const filtered = filterByAvailability(allExtracted, search.availableFrom, search.availableTo);
+	console.log(`  ${filtered.length} within availability window`);
+
 	const newPropertyIds: string[] = [];
 	const changedProps: Array<{
 		id: string;
 		changes: Array<{ field: string; oldValue: string; newValue: string }>;
 	}> = [];
 
-	for (const ext of allExtracted) {
+	for (const ext of filtered) {
 		// Upsert property
 		const [existing] = await db
 			.select()

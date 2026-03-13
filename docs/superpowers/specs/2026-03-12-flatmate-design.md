@@ -85,6 +85,8 @@ A saved Rightmove search configuration. Mirrors Rightmove's filter options.
 | max_bedrooms | int? | |
 | property_type | text? | null = Any |
 | include_let_agreed | boolean | |
+| available_from | date? | Earliest acceptable move-in date |
+| available_to | date? | Latest acceptable move-in date |
 | is_active | boolean | Default true. Set false to pause scraping. |
 | invite_code | text unique | For sharing join links |
 | last_scraped_at | timestamp? | |
@@ -220,14 +222,19 @@ Runs as a Railway cron job every 15 minutes. Processes all active searches on ea
 2. For each search, construct the Rightmove search URL from saved params (`locationIdentifier`, `minPrice`, `maxPrice`, `minBedrooms`, `maxBedrooms`, `radius`, `propertyType`, `includeLetAgreed`).
 3. Fetch the HTML page, extract `__NEXT_DATA__` → `props.pageProps.searchResults.properties`.
 4. Follow pagination using the `index` query param (24 results per page). Stop when results are empty, fewer than 24, or 42 pages reached.
-5. For each property in the results:
+5. **Availability window filter** — if the search has `available_from` and/or `available_to` set, discard properties that don't match. A property passes the filter if any of:
+   - Its `letAvailableDate` falls within the `[available_from, available_to]` window.
+   - Its `letAvailableDate` is null/empty (i.e. available "Now") and today's date is within the window.
+   - Its `letAvailableDate` text is "Ask agent" (always included — agent may have flexible dates).
+   If neither `available_from` nor `available_to` is set on the search, skip filtering entirely.
+6. For each property that passes the filter:
    - **New to DB** (`rightmove_id` not in `properties`): insert into `properties`, create `search_properties` row.
    - **Exists but not linked to this search**: create `search_properties` row only.
    - **Already linked**: compare key fields (price, available date, listing status). If changed, update the property and insert a row into `property_changes`.
-6. For new properties where `numberOfFloorplans > 0`, fetch the individual Rightmove listing page to extract floorplan URLs.
-7. For new properties, calculate commute times for all users in the search group via TfL (transit) and ORS (walking/cycling batch matrix).
-8. Update `last_scraped_at` on the search.
-9. Ping the SvelteKit `/api/notify` endpoint with the list of new property IDs, changed property IDs (with change details), and which searches they belong to. Notifications are sent for both new properties and price reductions.
+7. For new properties where `numberOfFloorplans > 0`, fetch the individual Rightmove listing page to extract floorplan URLs.
+8. For new properties, calculate commute times for all users in the search group via TfL (transit) and ORS (walking/cycling batch matrix).
+9. Update `last_scraped_at` on the search.
+10. Ping the SvelteKit `/api/notify` endpoint with the list of new property IDs, changed property IDs (with change details), and which searches they belong to. Notifications are sent for both new properties and price reductions.
 
 ### Data Extraction
 
