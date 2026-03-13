@@ -1595,6 +1595,8 @@ import { eq, and } from "drizzle-orm";
 import { buildSearchUrl, fetchSearchPage } from "./rightmove/search";
 import { extractProperties, type ExtractedProperty } from "./rightmove/extract";
 import { fetchFloorplanUrls } from "./rightmove/floorplans";
+// notify.ts is created in Task 21 — create a stub at this step:
+// export async function notifyNewProperties(...args: any[]) { console.log("notify stub", args); }
 import { notifyNewProperties } from "./notify";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -1629,6 +1631,7 @@ async function scrapeSearch(search: typeof searches.$inferSelect) {
 		const extracted = extractProperties(html);
 		if (extracted.length === 0) break;
 		allExtracted.push(...extracted);
+		if (extracted.length < 24) break; // Last page
 	}
 
 	console.log(`  Found ${allExtracted.length} properties`);
@@ -1713,7 +1716,7 @@ async function scrapeSearch(search: typeof searches.$inferSelect) {
 		await db
 			.insert(searchProperties)
 			.values({ searchId: search.id, propertyId })
-			.onConflictDoNothing();
+			.onConflictDoNothing({ target: [searchProperties.searchId, searchProperties.propertyId] });
 	}
 
 	// Update last_scraped_at
@@ -1844,6 +1847,7 @@ export function getOrsProfile(mode: string): string | null {
 	return ORS_PROFILES[mode] ?? null;
 }
 
+// Note: ORS expects coordinates as [longitude, latitude] — callers must pass [lng, lat] pairs
 export async function fetchOrsMatrix(
 	origins: [number, number][],
 	destinations: [number, number][],
