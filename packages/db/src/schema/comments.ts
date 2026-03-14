@@ -7,7 +7,7 @@ export const comments = pgTable("comments", {
 	searchPropertyId: uuid("search_property_id")
 		.notNull()
 		.references(() => searchProperties.id, { onDelete: "cascade" }),
-	userId: uuid("user_id")
+	userId: text("user_id")
 		.notNull()
 		.references(() => users.id, { onDelete: "cascade" }),
 	body: text("body").notNull(),

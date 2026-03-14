@@ -3,7 +3,7 @@ import { users } from "./auth";
 
 export const pushSubscriptions = pgTable("push_subscriptions", {
 	id: uuid("id").primaryKey().defaultRandom(),
-	userId: uuid("user_id")
+	userId: text("user_id")
 		.notNull()
 		.references(() => users.id, { onDelete: "cascade" }),
 	endpoint: text("endpoint").notNull().unique(),

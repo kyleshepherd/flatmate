@@ -47,10 +47,10 @@ export const searchProperties = pgTable(
 			.notNull()
 			.references(() => properties.id),
 		status: text("status").notNull().default("new"),
-		statusUpdatedBy: uuid("status_updated_by").references(() => users.id),
+		statusUpdatedBy: text("status_updated_by").references(() => users.id),
 		statusUpdatedAt: timestamp("status_updated_at"),
 		shortlisted: boolean("shortlisted").notNull().default(false),
-		shortlistedBy: uuid("shortlisted_by").references(() => users.id),
+		shortlistedBy: text("shortlisted_by").references(() => users.id),
 		addedAt: timestamp("added_at").notNull().defaultNow(),
 	},
 	(t) => [unique("search_property_unique").on(t.searchId, t.propertyId)],

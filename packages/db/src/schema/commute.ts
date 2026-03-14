@@ -4,7 +4,7 @@ import { properties } from "./properties";
 
 export const userCommuteDestinations = pgTable("user_commute_destinations", {
 	id: uuid("id").primaryKey().defaultRandom(),
-	userId: uuid("user_id")
+	userId: text("user_id")
 		.notNull()
 		.references(() => users.id, { onDelete: "cascade" }),
 	label: text("label").notNull(),
@@ -20,7 +20,7 @@ export const commuteTimes = pgTable(
 		propertyId: uuid("property_id")
 			.notNull()
 			.references(() => properties.id),
-		userId: uuid("user_id")
+		userId: text("user_id")
 			.notNull()
 			.references(() => users.id, { onDelete: "cascade" }),
 		destinationId: uuid("destination_id")

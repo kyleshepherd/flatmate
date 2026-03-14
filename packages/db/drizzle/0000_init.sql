@@ -1,6 +1,6 @@
 CREATE TABLE "accounts" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"user_id" uuid NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" text NOT NULL,
 	"account_id" text NOT NULL,
 	"provider_id" text NOT NULL,
 	"access_token" text,
@@ -15,8 +15,8 @@ CREATE TABLE "accounts" (
 );
 --> statement-breakpoint
 CREATE TABLE "sessions" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"user_id" uuid NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" text NOT NULL,
 	"token" text NOT NULL,
 	"expires_at" timestamp NOT NULL,
 	"ip_address" text,
@@ -27,7 +27,7 @@ CREATE TABLE "sessions" (
 );
 --> statement-breakpoint
 CREATE TABLE "users" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"email" text NOT NULL,
 	"email_verified" boolean DEFAULT false NOT NULL,
@@ -38,7 +38,7 @@ CREATE TABLE "users" (
 );
 --> statement-breakpoint
 CREATE TABLE "verifications" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"identifier" text NOT NULL,
 	"value" text NOT NULL,
 	"expires_at" timestamp NOT NULL,
@@ -49,7 +49,7 @@ CREATE TABLE "verifications" (
 CREATE TABLE "comments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"search_property_id" uuid NOT NULL,
-	"user_id" uuid NOT NULL,
+	"user_id" text NOT NULL,
 	"body" text NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
@@ -57,7 +57,7 @@ CREATE TABLE "comments" (
 CREATE TABLE "commute_times" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"property_id" uuid NOT NULL,
-	"user_id" uuid NOT NULL,
+	"user_id" text NOT NULL,
 	"destination_id" uuid NOT NULL,
 	"mode" text NOT NULL,
 	"duration_mins" integer,
@@ -67,7 +67,7 @@ CREATE TABLE "commute_times" (
 --> statement-breakpoint
 CREATE TABLE "user_commute_destinations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"user_id" uuid NOT NULL,
+	"user_id" text NOT NULL,
 	"label" text NOT NULL,
 	"latitude" numeric(10, 6) NOT NULL,
 	"longitude" numeric(10, 6) NOT NULL,
@@ -77,7 +77,7 @@ CREATE TABLE "user_commute_destinations" (
 CREATE TABLE "search_members" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"search_id" uuid NOT NULL,
-	"user_id" uuid NOT NULL,
+	"user_id" text NOT NULL,
 	"role" text DEFAULT 'member' NOT NULL,
 	"pending_commute_backfill" boolean DEFAULT true NOT NULL,
 	"joined_at" timestamp DEFAULT now() NOT NULL
@@ -86,7 +86,7 @@ CREATE TABLE "search_members" (
 CREATE TABLE "searches" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
-	"created_by" uuid NOT NULL,
+	"created_by" text NOT NULL,
 	"location_identifier" text NOT NULL,
 	"location_name" text NOT NULL,
 	"radius" numeric(4, 1) DEFAULT '0' NOT NULL,
@@ -142,17 +142,17 @@ CREATE TABLE "search_properties" (
 	"search_id" uuid NOT NULL,
 	"property_id" uuid NOT NULL,
 	"status" text DEFAULT 'new' NOT NULL,
-	"status_updated_by" uuid,
+	"status_updated_by" text,
 	"status_updated_at" timestamp,
 	"shortlisted" boolean DEFAULT false NOT NULL,
-	"shortlisted_by" uuid,
+	"shortlisted_by" text,
 	"added_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "search_property_unique" UNIQUE("search_id","property_id")
 );
 --> statement-breakpoint
 CREATE TABLE "push_subscriptions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"user_id" uuid NOT NULL,
+	"user_id" text NOT NULL,
 	"endpoint" text NOT NULL,
 	"keys" jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,

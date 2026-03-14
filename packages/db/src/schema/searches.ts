@@ -4,7 +4,7 @@ import { users } from "./auth";
 export const searches = pgTable("searches", {
 	id: uuid("id").primaryKey().defaultRandom(),
 	name: text("name").notNull(),
-	createdBy: uuid("created_by")
+	createdBy: text("created_by")
 		.notNull()
 		.references(() => users.id),
 	locationIdentifier: text("location_identifier").notNull(),
@@ -29,7 +29,7 @@ export const searchMembers = pgTable("search_members", {
 	searchId: uuid("search_id")
 		.notNull()
 		.references(() => searches.id, { onDelete: "cascade" }),
-	userId: uuid("user_id")
+	userId: text("user_id")
 		.notNull()
 		.references(() => users.id, { onDelete: "cascade" }),
 	role: text("role").notNull().default("member"),
