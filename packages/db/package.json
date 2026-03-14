@@ -1,0 +1,22 @@
+{
+	"name": "@flatmate/db",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"generate": "drizzle-kit generate",
+		"generate:named": "drizzle-kit generate --name",
+		"migrate": "drizzle-kit migrate",
+		"studio": "drizzle-kit studio"
+	},
+	"dependencies": {
+		"drizzle-orm": "^0.38.0",
+		"postgres": "^3.4.5"
+	},
+	"devDependencies": {
+		"drizzle-kit": "^0.30.0",
+		"typescript": "^5.7.0"
+	}
+}
