@@ -8,11 +8,12 @@
 	},
 	"dependencies": {
 		"@flatmate/db": "workspace:*",
+		"dotenv": "^17.3.1",
 		"web-push": "^3.6.0"
 	},
 	"devDependencies": {
+		"@types/web-push": "^3.6.0",
 		"tsx": "^4.0.0",
-		"typescript": "^5.7.0",
-		"@types/web-push": "^3.6.0"
+		"typescript": "^5.7.0"
 	}
 }
