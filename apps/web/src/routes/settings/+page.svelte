@@ -14,11 +14,60 @@
 
 	let showAddForm = $state(false);
 	let label = $state("");
+	let locationQuery = $state("");
 	let latitude = $state("");
 	let longitude = $state("");
 	let transitChecked = $state(true);
 	let walkingChecked = $state(false);
 	let cyclingChecked = $state(false);
+
+	type LocationResult = { display_name: string; lat: string; lon: string };
+	let suggestions = $state<LocationResult[]>([]);
+	let showSuggestions = $state(false);
+	let selectedLocation = $state(false);
+	let debounceTimer: ReturnType<typeof setTimeout>;
+
+	function onLocationInput() {
+		selectedLocation = false;
+		const q = locationQuery.trim();
+		if (q.length < 3) {
+			suggestions = [];
+			showSuggestions = false;
+			return;
+		}
+
+		clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(async () => {
+			const res = await fetch(
+				`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=gb&limit=5`,
+				{ headers: { "Accept": "application/json" } },
+			);
+			if (res.ok) {
+				suggestions = await res.json();
+				showSuggestions = suggestions.length > 0;
+			}
+		}, 300);
+	}
+
+	function selectLocation(loc: LocationResult) {
+		locationQuery = loc.display_name;
+		latitude = loc.lat;
+		longitude = loc.lon;
+		selectedLocation = true;
+		showSuggestions = false;
+	}
+
+	function resetForm() {
+		label = "";
+		locationQuery = "";
+		latitude = "";
+		longitude = "";
+		selectedLocation = false;
+		transitChecked = true;
+		walkingChecked = false;
+		cyclingChecked = false;
+		showAddForm = false;
+	}
 </script>
 
 <div style="max-width: 640px; margin: 0 auto;">
@@ -61,7 +110,7 @@
 				<div>
 					<p style="font-weight: 600; font-size: 14px;">{dest.label}</p>
 					<p style="font-size: 12px; color: var(--muted-foreground); margin-top: 2px;">
-						{dest.modes.join(", ")} &middot; {Number(dest.latitude).toFixed(4)}, {Number(dest.longitude).toFixed(4)}
+						{dest.modes.join(", ")}
 					</p>
 				</div>
 				<form method="POST" action="?/deleteDestination" use:enhance>
@@ -78,30 +127,57 @@
 				action="?/addDestination"
 				use:enhance={() => {
 					return async ({ update }) => {
-						label = "";
-						latitude = "";
-						longitude = "";
-						showAddForm = false;
+						resetForm();
 						await update();
 					};
 				}}
 				style="padding: 16px; border-radius: 12px; background: var(--card); border: 1px solid rgba(255,255,255,0.06); margin-top: 8px;"
 			>
+				<input type="hidden" name="latitude" value={latitude} />
+				<input type="hidden" name="longitude" value={longitude} />
+
 				<div style="display: flex; flex-direction: column; gap: 12px;">
 					<div>
 						<Label for="label">Label</Label>
 						<Input id="label" name="label" bind:value={label} placeholder="e.g. Office, Gym" required />
 					</div>
 
-					<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-						<div>
-							<Label for="latitude">Latitude</Label>
-							<Input id="latitude" name="latitude" bind:value={latitude} placeholder="51.5234" required />
+					<div>
+						<Label for="location">Location</Label>
+						<div style="position: relative;">
+							<Input
+								id="location"
+								bind:value={locationQuery}
+								oninput={onLocationInput}
+								onfocus={() => { if (suggestions.length) showSuggestions = true; }}
+								onblur={() => setTimeout(() => { showSuggestions = false; }, 150)}
+								placeholder="Search for an address..."
+								autocomplete="off"
+							/>
+							{#if showSuggestions}
+								<div style="position: absolute; top: 100%; left: 0; right: 0; z-index: 50; margin-top: 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); background: var(--popover); box-shadow: 0 8px 24px rgba(0,0,0,0.4); overflow: hidden;">
+									{#each suggestions as loc}
+										<button
+											type="button"
+											onmousedown={() => selectLocation(loc)}
+											style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; text-align: left; font-size: 13px; border: none; background: transparent; color: var(--foreground); cursor: pointer;"
+											class="hover:bg-accent"
+										>
+											<svg style="width: 14px; height: 14px; flex-shrink: 0; color: var(--muted-foreground);" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+												<path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+											</svg>
+											<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{loc.display_name}</span>
+										</button>
+									{/each}
+								</div>
+							{/if}
 						</div>
-						<div>
-							<Label for="longitude">Longitude</Label>
-							<Input id="longitude" name="longitude" bind:value={longitude} placeholder="-0.1045" required />
-						</div>
+						{#if selectedLocation}
+							<p style="margin-top: 4px; font-size: 11px; color: var(--muted-foreground);">
+								{Number(latitude).toFixed(5)}, {Number(longitude).toFixed(5)}
+							</p>
+						{/if}
 					</div>
 
 					<div>
@@ -124,7 +200,7 @@
 
 					<div style="display: flex; gap: 8px; justify-content: flex-end;">
 						<Button type="button" variant="outline" size="sm" onclick={() => (showAddForm = false)}>Cancel</Button>
-						<Button type="submit" size="sm">Add destination</Button>
+						<Button type="submit" size="sm" disabled={!label.trim() || !selectedLocation}>Add destination</Button>
 					</div>
 				</div>
 			</form>
