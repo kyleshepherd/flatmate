@@ -46,8 +46,8 @@
 
 <a
 	href="/searches/{searchId}/properties/{property.propertyId}"
-	style="display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; background: var(--card); border: 1px solid rgba(255,255,255,0.08); transition: all 0.2s; text-decoration: none; color: inherit;"
-	class="group hover:border-primary/30 hover:shadow-xl hover:shadow-primary/[0.04] hover:-translate-y-0.5"
+	style="display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; background: var(--card); border: 1px solid rgba(255,255,255,0.08); transition: border-color 0.2s, box-shadow 0.2s; text-decoration: none; color: inherit;"
+	class="group hover:border-primary/30"
 >
 	<!-- Image -->
 	<div style="position: relative; height: 220px; overflow: hidden; background: #1a1a1a;">
@@ -55,8 +55,7 @@
 			<img
 				src={imageUrl}
 				alt={property.address}
-				style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s;"
-				class="group-hover:scale-105"
+				style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;"
 				loading="lazy"
 			/>
 		{:else}
