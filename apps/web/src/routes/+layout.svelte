@@ -1,10 +1,38 @@
 <script lang="ts">
 	import "../app.css";
+	import { onMount } from "svelte";
+	import { browser } from "$app/environment";
 	import type { Snippet } from "svelte";
 	import type { LayoutData } from "./$types";
 	import * as Avatar from "$lib/components/ui/avatar";
 
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();
+
+	onMount(async () => {
+		if (!browser || !data.session || !data.vapidPublicKey || !("serviceWorker" in navigator)) return;
+
+		try {
+			const reg = await navigator.serviceWorker.register("/service-worker.js");
+			const existing = await reg.pushManager.getSubscription();
+			if (existing) return; // Already subscribed
+
+			const permission = await Notification.requestPermission();
+			if (permission !== "granted") return;
+
+			const sub = await reg.pushManager.subscribe({
+				userVisibleOnly: true,
+				applicationServerKey: data.vapidPublicKey,
+			});
+
+			await fetch("/api/push/subscribe", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(sub.toJSON()),
+			});
+		} catch (err) {
+			console.warn("Push subscription failed:", err);
+		}
+	});
 </script>
 
 <div class="min-h-screen bg-background text-foreground">

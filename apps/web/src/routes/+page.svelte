@@ -1,3 +1,7 @@
+<svelte:head>
+	<title>Dashboard - Flatmate</title>
+</svelte:head>
+
 <script lang="ts">
 	import { Button } from "$lib/components/ui/button";
 	import type { PageData } from "./$types";

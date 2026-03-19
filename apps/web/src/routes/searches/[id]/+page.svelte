@@ -1,3 +1,7 @@
+<svelte:head>
+	<title>{data.search.name} - Flatmate</title>
+</svelte:head>
+
 <script lang="ts">
 	import { goto } from "$app/navigation";
 	import { page } from "$app/stores";
