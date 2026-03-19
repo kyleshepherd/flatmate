@@ -202,6 +202,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 			name: search.name,
 			locationName: search.locationName,
 			inviteCode: search.inviteCode,
+			isActive: search.isActive,
 		},
 		members,
 		properties: propertiesWithCommutes,
