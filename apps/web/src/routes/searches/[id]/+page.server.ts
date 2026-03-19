@@ -13,6 +13,8 @@ import {
 	and,
 	desc,
 	asc,
+	count,
+	sql,
 } from "@flatmate/db";
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
@@ -176,6 +178,24 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		commutes: commutesByProperty.get(p.propertyId) ?? [],
 	}));
 
+	// Status counts (always from all properties, not filtered)
+	const countRows = await db
+		.select({
+			status: searchProperties.status,
+			count: count(),
+		})
+		.from(searchProperties)
+		.where(eq(searchProperties.searchId, params.id))
+		.groupBy(searchProperties.status);
+
+	const statusCounts: Record<string, number> = {};
+	let totalExcludingNotInterested = 0;
+	for (const row of countRows) {
+		statusCounts[row.status] = row.count;
+		if (row.status !== "not_interested") totalExcludingNotInterested += row.count;
+	}
+	statusCounts[""] = totalExcludingNotInterested;
+
 	return {
 		search: {
 			id: search.id,
@@ -185,6 +205,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		},
 		members,
 		properties: propertiesWithCommutes,
+		statusCounts,
 		sort,
 		statusFilter,
 		role: membership.role,

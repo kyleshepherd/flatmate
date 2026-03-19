@@ -23,7 +23,7 @@
 		goto(url.toString(), { replaceState: true });
 	}
 
-	function setStatus(value: string) {
+	function setTab(value: string) {
 		const url = new URL($page.url);
 		if (value) {
 			url.searchParams.set("status", value);
@@ -33,11 +33,11 @@
 		goto(url.toString(), { replaceState: true });
 	}
 
-	const statusOptions = [
-		{ value: "", label: "All statuses" },
+	const tabs = [
+		{ value: "", label: "All" },
 		{ value: "new", label: "New" },
 		{ value: "interested", label: "Interested" },
-		{ value: "viewing_booked", label: "Viewing Booked" },
+		{ value: "viewing_booked", label: "Viewing" },
 		{ value: "applied", label: "Applied" },
 		{ value: "rejected", label: "Rejected" },
 		{ value: "not_interested", label: "Not Interested" },
@@ -48,6 +48,15 @@
 		{ value: "price_asc", label: "Price: low to high" },
 		{ value: "price_desc", label: "Price: high to low" },
 	];
+
+	let activeTab = $derived(data.statusFilter ?? "");
+
+	// "All" tab hides not_interested
+	let filteredProperties = $derived(
+		activeTab === ""
+			? data.properties.filter((p) => p.status !== "not_interested")
+			: data.properties,
+	);
 </script>
 
 <div>
@@ -68,7 +77,7 @@
 				<h1 class="text-2xl font-bold tracking-tight">{data.search.name}</h1>
 				<div class="mt-1 space-y-0.5 text-sm text-muted-foreground">
 					<p>{data.search.locationName}</p>
-					<p>{data.properties.length} properties &middot; {data.members.length} {data.members.length === 1 ? "member" : "members"}</p>
+					<p>{data.statusCounts[""] ?? 0} properties &middot; {data.members.length} {data.members.length === 1 ? "member" : "members"}</p>
 				</div>
 			</div>
 
@@ -78,8 +87,38 @@
 		</div>
 	</div>
 
-	<!-- Filters -->
-	<div style="margin-bottom: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px;">
+	<!-- Status tabs -->
+	<div style="margin-bottom: 16px; display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px;" class="hide-scrollbar">
+		{#each tabs as tab}
+			<button
+				onclick={() => setTab(tab.value)}
+				style="
+					flex-shrink: 0;
+					padding: 6px 14px;
+					border-radius: 8px;
+					font-size: 13px;
+					font-weight: 500;
+					border: none;
+					cursor: pointer;
+					transition: all 0.15s;
+					background: {activeTab === tab.value ? 'var(--primary)' : 'var(--secondary)'};
+					color: {activeTab === tab.value ? 'var(--primary-foreground)' : 'var(--muted-foreground)'};
+				"
+			>
+				{tab.label}
+				{#if (data.statusCounts[tab.value] ?? 0) > 0}
+					<span style="
+						margin-left: 4px;
+						font-size: 11px;
+						opacity: {activeTab === tab.value ? '0.8' : '0.5'};
+					">{data.statusCounts[tab.value]}</span>
+				{/if}
+			</button>
+		{/each}
+	</div>
+
+	<!-- Sort -->
+	<div style="margin-bottom: 20px;">
 		<Select.Root
 			type="single"
 			value={data.sort}
@@ -94,37 +133,26 @@
 				{/each}
 			</Select.Content>
 		</Select.Root>
-
-		<Select.Root
-			type="single"
-			value={data.statusFilter ?? ""}
-			onValueChange={(v) => setStatus(v ?? "")}
-		>
-			<Select.Trigger class="w-40" size="sm">
-				{statusOptions.find((o) => o.value === (data.statusFilter ?? ""))?.label ?? "All statuses"}
-			</Select.Trigger>
-			<Select.Content>
-				{#each statusOptions as opt}
-					<Select.Item value={opt.value} label={opt.label} />
-				{/each}
-			</Select.Content>
-		</Select.Root>
 	</div>
 
 	<!-- Property list -->
-	{#if data.properties.length === 0}
+	{#if filteredProperties.length === 0}
 		<div class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 px-6 py-20 text-center">
 			<div class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-2xl">
 				&#128269;
 			</div>
-			<p class="text-lg font-semibold">No properties yet</p>
+			<p class="text-lg font-semibold">No properties</p>
 			<p class="mt-1 max-w-xs text-sm text-muted-foreground">
-				The scraper hasn't found any properties for this search yet. Check back soon.
+				{#if activeTab === ""}
+					The scraper hasn't found any properties for this search yet.
+				{:else}
+					No properties with this status yet.
+				{/if}
 			</p>
 		</div>
 	{:else}
 		<div class="property-grid">
-			{#each data.properties as property (property.propertyId)}
+			{#each filteredProperties as property (property.propertyId)}
 				<PropertyCard {property} searchId={data.search.id} />
 			{/each}
 		</div>
@@ -142,5 +170,12 @@
 			grid-template-columns: repeat(2, 1fr);
 			gap: 20px;
 		}
+	}
+	.hide-scrollbar {
+		-ms-overflow-style: none;
+		scrollbar-width: none;
+	}
+	.hide-scrollbar::-webkit-scrollbar {
+		display: none;
 	}
 </style>
