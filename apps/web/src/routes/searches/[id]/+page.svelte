@@ -6,7 +6,19 @@
 	import PropertyCard from "$lib/components/PropertyCard.svelte";
 	import type { PageData } from "./$types";
 
+	let PropertyMap: typeof import("$lib/components/PropertyMap.svelte").default | null = $state(null);
+
 	let { data }: { data: PageData } = $props();
+	let viewMode = $derived(($page.url.searchParams.get("view") ?? "list") as "list" | "map");
+
+	// Lazy-load map component when switching to map view
+	$effect(() => {
+		if (viewMode === "map" && !PropertyMap) {
+			import("$lib/components/PropertyMap.svelte").then((mod) => {
+				PropertyMap = mod.default;
+			});
+		}
+	});
 
 	let copied = $state(false);
 
@@ -117,8 +129,8 @@
 		{/each}
 	</div>
 
-	<!-- Sort -->
-	<div style="margin-bottom: 20px;">
+	<!-- Sort + View toggle -->
+	<div style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
 		<Select.Root
 			type="single"
 			value={data.sort}
@@ -133,10 +145,27 @@
 				{/each}
 			</Select.Content>
 		</Select.Root>
+
+		<div style="display: flex; gap: 2px; background: var(--secondary); border-radius: 8px; padding: 2px;">
+			<button
+				onclick={() => { const u = new URL($page.url); u.searchParams.delete("view"); goto(u.toString(), { replaceState: true }); }}
+				style="padding: 5px 10px; border-radius: 6px; border: none; cursor: pointer; display: flex; align-items: center; background: {viewMode === 'list' ? 'var(--card)' : 'transparent'}; color: {viewMode === 'list' ? 'var(--foreground)' : 'var(--muted-foreground)'}; transition: all 0.15s;"
+			>
+				<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+			</button>
+			<button
+				onclick={() => { const u = new URL($page.url); u.searchParams.set("view", "map"); goto(u.toString(), { replaceState: true }); }}
+				style="padding: 5px 10px; border-radius: 6px; border: none; cursor: pointer; display: flex; align-items: center; background: {viewMode === 'map' ? 'var(--card)' : 'transparent'}; color: {viewMode === 'map' ? 'var(--foreground)' : 'var(--muted-foreground)'}; transition: all 0.15s;"
+			>
+				<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
+			</button>
+		</div>
 	</div>
 
-	<!-- Property list -->
-	{#if filteredProperties.length === 0}
+	<!-- Content -->
+	{#if viewMode === "map" && PropertyMap}
+		<PropertyMap properties={filteredProperties} searchId={data.search.id} />
+	{:else if filteredProperties.length === 0}
 		<div class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 px-6 py-20 text-center">
 			<div class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-2xl">
 				&#128269;

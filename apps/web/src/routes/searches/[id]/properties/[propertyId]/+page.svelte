@@ -3,6 +3,7 @@
 	import { Button } from "$lib/components/ui/button";
 	import * as Select from "$lib/components/ui/select";
 	import CommuteChips from "$lib/components/CommuteChips.svelte";
+	import PropertyLocationMap from "$lib/components/PropertyLocationMap.svelte";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
@@ -212,6 +213,11 @@
 
 		<!-- Right column (sidebar) -->
 		<div style="display: flex; flex-direction: column; gap: 24px;">
+			<!-- Location map -->
+			<div style="border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06);">
+				<PropertyLocationMap latitude={data.property.latitude} longitude={data.property.longitude} />
+			</div>
+
 			<!-- Commute times -->
 			{#if data.commutes.length > 0}
 				<div style="padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); background: var(--card);">
