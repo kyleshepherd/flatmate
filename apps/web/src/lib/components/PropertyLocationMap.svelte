@@ -24,13 +24,10 @@
 		const lng = Number(longitude);
 
 		const map = L.map(mapContainer, {
-			zoomControl: false,
-			scrollWheelZoom: false,
-			dragging: false,
-			doubleClickZoom: false,
+			zoomControl: true,
 		}).setView([lat, lng], 15);
 
-		L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+		L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
 			attribution: "",
 			maxZoom: 19,
 		}).addTo(map);
@@ -53,7 +50,7 @@
 
 <div
 	bind:this={mapContainer}
-	style="width: 100%; height: 200px; border-radius: 12px; overflow: hidden;"
+	style="width: 100%; height: 300px; border-radius: 12px; overflow: hidden;"
 ></div>
 
 <style>
