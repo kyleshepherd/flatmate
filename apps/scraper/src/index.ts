@@ -11,10 +11,13 @@ import { buildSearchUrl, fetchSearchPage } from "./rightmove/search";
 import { extractProperties, type ExtractedProperty } from "./rightmove/extract";
 import { fetchFloorplanUrls } from "./rightmove/floorplans";
 import { notifyNewProperties } from "./notify";
+import { calculateCommutesForNewProperties, runCommuteBackfill } from "./commute/calculate";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) throw new Error("DATABASE_URL is required");
 
+const TFL_API_KEY = process.env.TFL_API_KEY ?? "";
+const ORS_API_KEY = process.env.ORS_API_KEY ?? "";
 const NOTIFY_ENDPOINT = process.env.NOTIFY_ENDPOINT ?? "";
 const SCRAPER_SECRET = process.env.SCRAPER_SECRET ?? "";
 
@@ -181,6 +184,11 @@ async function scrapeSearch(search: typeof searches.$inferSelect) {
 		newPropertyIds,
 		changedProps,
 	);
+
+	// Calculate commute times for new properties
+	const commuteCtx = { db, tflApiKey: TFL_API_KEY, orsApiKey: ORS_API_KEY };
+	await calculateCommutesForNewProperties(commuteCtx, search.id, newPropertyIds);
+	await runCommuteBackfill(commuteCtx, search.id);
 
 	return { newCount: newPropertyIds.length, changedCount: changedProps.length };
 }
