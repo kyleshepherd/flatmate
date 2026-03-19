@@ -27,5 +27,8 @@ export async function fetchFloorplanUrls(rightmoveUrl: string): Promise<string[]
 		}
 	}
 
-	return floorplanUrls;
+	// Strip crop and resize params to get full-res URLs
+	return floorplanUrls.map((url) =>
+		url.replace(/\/dir\/crop\/[^/]+\//, "/dir/").replace(/_max_\d+x\d+/, ""),
+	);
 }

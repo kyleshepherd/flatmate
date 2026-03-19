@@ -203,7 +203,7 @@
 					<h2 style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">Floorplan{floorplans.length > 1 ? "s" : ""}</h2>
 					<div style="display: flex; flex-direction: column; gap: 8px;">
 						{#each floorplans as url}
-							<img src={url} alt="Floorplan" style="width: 100%; border-radius: 12px; background: white;" loading="lazy" />
+							<img src={url.replace(/dir\/crop\/[^/]+\//, "dir/").replace(/_max_\d+x\d+/, "")} alt="Floorplan" style="max-width: 100%; max-height: 500px; object-fit: contain; border-radius: 12px; background: white; padding: 12px;" loading="lazy" />
 						{/each}
 					</div>
 				</div>
